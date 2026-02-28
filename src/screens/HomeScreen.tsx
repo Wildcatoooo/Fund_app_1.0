@@ -128,7 +128,7 @@ const GroupSection = ({ groupName, funds, renderFunds, totalAmount }: any) => {
 };
 
 export default function HomeScreen() {
-  const { navigate, funds, toggleFavorite, deleteFund, refreshData } = useContext(NavigationContext);
+  const { navigate, funds, toggleFavorite, deleteFund, refreshData, messages } = useContext(NavigationContext);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [grouped, setGrouped] = useState(false);
@@ -248,6 +248,8 @@ export default function HomeScreen() {
     )});
   };
 
+  const unreadCount = messages.filter(m => !m.read).length;
+
   return (
     <div className="flex-1 overflow-y-auto pb-24 no-scrollbar">
       {/* Header */}
@@ -270,9 +272,11 @@ export default function HomeScreen() {
         </div>
         <button onClick={() => navigate('messages')} className="relative flex items-center justify-center size-10 rounded-full text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
           <span className="material-symbols-outlined">notifications</span>
-          <div className="absolute top-2 right-2 flex items-center justify-center size-4 rounded-full bg-red-500 border-2 border-background-light dark:border-background-dark">
-            <span className="text-[9px] font-bold text-white leading-none">3</span>
-          </div>
+          {unreadCount > 0 && (
+            <div className="absolute top-2 right-2 flex items-center justify-center size-4 rounded-full bg-red-500 border-2 border-background-light dark:border-background-dark">
+              <span className="text-[9px] font-bold text-white leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>
+            </div>
+          )}
         </button>
       </div>
 

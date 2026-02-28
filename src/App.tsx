@@ -72,6 +72,15 @@ export type FundMemory = {
   updatedAt: number;
 };
 
+export type AppMessage = {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  read: boolean;
+  type: 'alert' | 'info';
+};
+
 export const NavigationContext = React.createContext<{
   currentScreen: Screen;
   screenParams: any;
@@ -92,6 +101,10 @@ export const NavigationContext = React.createContext<{
   refreshData: () => Promise<void>;
   fundMemory: FundMemory[];
   upsertFundMemory: (code: string, name: string) => void;
+  messages: AppMessage[];
+  markMessageRead: (id: string) => void;
+  markAllMessagesRead: () => void;
+  deleteMessage: (id: string) => void;
 }>({
   currentScreen: 'home',
   screenParams: null,
@@ -112,6 +125,10 @@ export const NavigationContext = React.createContext<{
   refreshData: async () => {},
   fundMemory: [],
   upsertFundMemory: () => {},
+  messages: [],
+  markMessageRead: () => {},
+  markAllMessagesRead: () => {},
+  deleteMessage: () => {},
 });
 
 export default function App() {
@@ -138,6 +155,16 @@ export default function App() {
     return [];
   });
 
+  const [messages, setMessages] = useState<AppMessage[]>(() => {
+    const saved = localStorage.getItem('fund_messages');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+
   useEffect(() => {
     localStorage.setItem('fund_app_data', JSON.stringify(funds));
   }, [funds]);
@@ -145,6 +172,22 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('fund_memory_db', JSON.stringify(fundMemory));
   }, [fundMemory]);
+
+  useEffect(() => {
+    localStorage.setItem('fund_messages', JSON.stringify(messages));
+  }, [messages]);
+
+  const markMessageRead = (id: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
+  };
+
+  const markAllMessagesRead = () => {
+    setMessages(prev => prev.map(m => ({ ...m, read: true })));
+  };
+
+  const deleteMessage = (id: string) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  };
 
   const upsertFundMemory = (code: string, name: string) => {
     setFundMemory(prev => {
@@ -236,6 +279,62 @@ export default function App() {
         return fund;
       }));
       setFunds(updatedFunds);
+
+      // Check for alerts at 14:30
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const lastAlertDate = localStorage.getItem('last_alert_date');
+      
+      if (now.getHours() > 14 || (now.getHours() === 14 && now.getMinutes() >= 30)) {
+        if (lastAlertDate !== todayStr) {
+          const newMessages: AppMessage[] = [];
+          
+          updatedFunds.forEach(fund => {
+            if (fund.isStarred) {
+              let alertReasons = [];
+              
+              let lastBuyNav = null;
+              let lastBuyAmount = null;
+              if (fund.transactions && fund.transactions.length > 0) {
+                const buys = fund.transactions.filter(t => t.type === 'buy' || t.type === 'add').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                if (buys.length > 0) {
+                  lastBuyNav = buys[0].nav;
+                  lastBuyAmount = buys[0].amount;
+                }
+              }
+              
+              const currentNav = parseFloat(fund.nav);
+              
+              if (lastBuyNav && currentNav < lastBuyNav) {
+                alertReasons.push(`当前净值(${currentNav})低于上次买入净值(${lastBuyNav})`);
+              }
+              
+              if (fund.totalReturnRate > 15) {
+                alertReasons.push(`累计收益高于15% (${fund.totalReturnRate.toFixed(2)}%)`);
+              } else if (fund.totalReturnRate < 10) {
+                alertReasons.push(`累计收益低于10% (${fund.totalReturnRate.toFixed(2)}%)`);
+              }
+              
+              if (alertReasons.length > 0) {
+                newMessages.push({
+                  id: Date.now().toString() + Math.random().toString(36).substring(7),
+                  title: `基金异动提醒: ${fund.name}`,
+                  content: `基金名: ${fund.name}\n上次买入净值: ${lastBuyNav || '无'}\n买入金额: ${lastBuyAmount ? '¥'+lastBuyAmount : '无'}\n当前总额: ¥${fund.amount.toFixed(2)}\n当前净值: ${fund.nav}\n\n触发原因:\n- ${alertReasons.join('\n- ')}`,
+                  date: now.toISOString(),
+                  read: false,
+                  type: 'alert'
+                });
+              }
+            }
+          });
+          
+          if (newMessages.length > 0) {
+            setMessages(prev => [...newMessages, ...prev]);
+          }
+          localStorage.setItem('last_alert_date', todayStr);
+        }
+      }
+
     } catch (error) {
       console.error('Failed to fetch real-time data', error);
     }
@@ -311,7 +410,7 @@ export default function App() {
   const showBottomNav = ['home', 'favorites', 'profile', 'fund-detail'].includes(currentScreen);
 
   return (
-    <NavigationContext.Provider value={{ currentScreen, screenParams, navigate, currentModal, modalParams, openModal, closeModal, goBack, funds, toggleFavorite, deleteFund, addFund, addTransaction, updateGroupName, changeFundGroup, updateFund, refreshData, fundMemory, upsertFundMemory }}>
+    <NavigationContext.Provider value={{ currentScreen, screenParams, navigate, currentModal, modalParams, openModal, closeModal, goBack, funds, toggleFavorite, deleteFund, addFund, addTransaction, updateGroupName, changeFundGroup, updateFund, refreshData, fundMemory, upsertFundMemory, messages, markMessageRead, markAllMessagesRead, deleteMessage }}>
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-background-light shadow-2xl dark:bg-background-dark">
         <AnimatePresence mode="wait">
           <motion.div

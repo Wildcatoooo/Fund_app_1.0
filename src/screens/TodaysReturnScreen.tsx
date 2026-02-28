@@ -76,8 +76,8 @@ export default function TodaysReturnScreen() {
               onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
               className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-primary transition-colors"
             >
-              <span className="material-symbols-outlined text-[14px]">
-                {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+              <span className="text-[12px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                {sortOrder === 'asc' ? '正序' : '倒序'}
               </span>
             </button>
           </div>
