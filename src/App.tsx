@@ -312,6 +312,13 @@ export default function App() {
           const newMessages: AppMessage[] = [];
           
           updatedFunds.forEach(fund => {
+            // Check if today is a trading day for this fund
+            // If it's a weekend, or if the fund's latest update time is not today, it means today is a non-trading day (weekend/holiday)
+            const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+            if (isWeekend || (fund.updateTime && fund.updateTime !== '未知' && !fund.updateTime.startsWith(todayStr))) {
+              return; // Skip alerts for non-trading days
+            }
+
             let alertReasons = [];
             const currentNav = parseFloat(fund.nav);
 
