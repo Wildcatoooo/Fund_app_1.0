@@ -1,8 +1,9 @@
 import React, { useContext, useState } from 'react';
 import { NavigationContext } from '../App';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function MemoryBankScreen() {
-  const { goBack, fundMemory, upsertFundMemory } = useContext(NavigationContext);
+  const { goBack, fundMemory, upsertFundMemory, deleteFundMemory } = useContext(NavigationContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [newCode, setNewCode] = useState('');
@@ -80,22 +81,39 @@ export default function MemoryBankScreen() {
           </div>
         )}
 
-        <div className="space-y-2">
-          {filteredMemory.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-sm">暂无匹配的基金记录</div>
-          ) : (
-            filteredMemory.map(fund => (
-              <div key={fund.fundCode} className="flex items-center justify-between p-4 bg-white dark:bg-[#192633] rounded-xl border border-slate-100 dark:border-slate-800/50 shadow-sm">
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white">{fund.fundName}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">{fund.fundCode}</div>
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  {new Date(fund.updatedAt).toLocaleDateString()}
-                </div>
-              </div>
-            ))
-          )}
+        <div className="space-y-2 overflow-hidden">
+          <AnimatePresence>
+            {filteredMemory.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm">暂无匹配的基金记录</div>
+            ) : (
+              filteredMemory.map(fund => (
+                <motion.div 
+                  key={fund.fundCode}
+                  layout
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0, x: -100 }}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={{ left: 0.5, right: 0 }}
+                  onDragEnd={(e, { offset, velocity }) => {
+                    if (offset.x < -100 || velocity.x < -500) {
+                      deleteFundMemory(fund.fundCode);
+                    }
+                  }}
+                  className="flex items-center justify-between p-4 bg-white dark:bg-[#192633] rounded-xl border border-slate-100 dark:border-slate-800/50 shadow-sm relative"
+                >
+                  <div>
+                    <div className="font-bold text-slate-900 dark:text-white">{fund.fundName}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">{fund.fundCode}</div>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {new Date(fund.updatedAt).toLocaleDateString()}
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

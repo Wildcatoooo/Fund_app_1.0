@@ -128,12 +128,16 @@ const GroupSection = ({ groupName, funds, renderFunds, totalAmount }: any) => {
 };
 
 export default function HomeScreen() {
-  const { navigate, funds, toggleFavorite, deleteFund, refreshData, messages } = useContext(NavigationContext);
+  const { navigate, funds, toggleFavorite, deleteFund, refreshData, messages, accounts, currentAccountId } = useContext(NavigationContext);
   const [privacyMode, setPrivacyMode] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [grouped, setGrouped] = useState(false);
   const [sortField, setSortField] = useState<'name' | 'amount' | 'returnRate' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const currentAccount = accounts.find(a => a.id === currentAccountId);
+  const userName = currentAccount?.name || '张三';
+  const userAvatar = currentAccount?.avatarUrl || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDHXRdImaOWAILwdlH0ieQAT9f0VCO3__kvGFixQ9syXVmJXnCstUw4DAb2x4msKz2gplzqAILuy8I08GH9T-4gDijTUL5WQkTwshDVdiIYnGgvFsXHU_dDDqa2QGM6CuVTdSBgCfh-aLoOYb28FC96Diayj_GRIbZsAw1KSImsF0dm0TdbU3soVwqjhDSP9YRJd8Dygz_uW_MiFzAOzRuw3DpDPXjT7oCOqmZL4qqr-SlxAl83l02N8eiO6HxksgXnZPFUtvapaA';
 
   const handleSort = (field: 'name' | 'amount' | 'returnRate') => {
     if (sortField === field) {
@@ -256,12 +260,12 @@ export default function HomeScreen() {
       <div className="flex items-center justify-between p-4 pb-2 sticky top-0 z-20 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border-2 border-primary/20">
-            <div className="bg-center bg-no-repeat w-full h-full bg-cover" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDHXRdImaOWAILwdlH0ieQAT9f0VCO3__kvGFixQ9syXVmJXnCstUw4DAb2x4msKz2gplzqAILuy8I08GH9T-4gDijTUL5WQkTwshDVdiIYnGgvFsXHU_dDDqa2QGM6CuVTdSBgCfh-aLoOYb28FC96Diayj_GRIbZsAw1KSImsF0dm0TdbU3soVwqjhDSP9YRJd8Dygz_uW_MiFzAOzRuw3DpDPXjT7oCOqmZL4qqr-SlxAl83l02N8eiO6HxksgXnZPFUtvapaA")' }}></div>
+            <div className="bg-center bg-no-repeat w-full h-full bg-cover" style={{ backgroundImage: `url("${userAvatar}")` }}></div>
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">欢迎回来</span>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold leading-tight">基金助手</h2>
+              <h2 className="text-lg font-bold leading-tight">{userName}</h2>
               {latestUpdateTime && (
                 <span className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                   {latestUpdateTime.substring(5)} 更新

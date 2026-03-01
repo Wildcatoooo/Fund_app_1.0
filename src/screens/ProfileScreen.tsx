@@ -1,11 +1,18 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { NavigationContext } from '../App';
 
 export default function ProfileScreen() {
-  const { openModal, navigate, funds, messages } = useContext(NavigationContext);
+  const { openModal, navigate, funds, messages, accounts, currentAccountId, updateAccountName, updateAccountAvatar } = useContext(NavigationContext);
 
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
-  const [userName, setUserName] = useState(() => localStorage.getItem('user_name') || '张三');
+  const [isEditingName, setIsEditingName] = useState(false);
+  
+  const currentAccount = accounts.find(a => a.id === currentAccountId);
+  const userName = currentAccount ? currentAccount.name : '张三';
+  const userAvatar = currentAccount?.avatarUrl || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAe1M1nQ7Ytof2W74oL3c81uhXZIWKAoB-xaBPzwp2KHCIa-ToePr9BklrmAnFkB0XM0V2_k7TpZRZE0TP4yn2FjNOuqOp_TOnxaHnjiM6h-PClbcmX8wfe2F18mwP_87WaD3FHl4ahHVaR86LWpqg7zSJFjINkSUgPPnPjSfu3InSTgk6TI3oG-kuXiAbtGJlHDBRlpp1zj8gUJpm_Nflsq39Ies1imzr2dO9pbB9AdrgbAN7KKhvJy6KYvOPnA2ziG6UvdtpiQQ';
+  const [editNameValue, setEditNameValue] = useState(userName);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const unreadCount = messages.filter(m => !m.read).length;
   const starredCount = funds.filter(f => f.isStarred).length;
@@ -18,11 +25,29 @@ export default function ProfileScreen() {
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
   };
 
-  const handleEditName = () => {
-    const newName = prompt('请输入新的昵称', userName);
-    if (newName && newName.trim()) {
-      setUserName(newName.trim());
-      localStorage.setItem('user_name', newName.trim());
+  useEffect(() => {
+    if (isEditingName && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditingName]);
+
+  const handleSaveName = () => {
+    if (editNameValue.trim()) {
+      updateAccountName(currentAccountId, editNameValue.trim());
+    } else {
+      setEditNameValue(userName);
+    }
+    setIsEditingName(false);
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        updateAccountAvatar(currentAccountId, reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -48,22 +73,41 @@ export default function ProfileScreen() {
       </div>
 
       <div className="flex flex-col items-center px-4 pt-4 pb-8">
-        <div className="relative mb-4 group cursor-pointer" onClick={handleEditName}>
-          <div className="h-24 w-24 rounded-full bg-slate-200 dark:bg-slate-700 bg-cover bg-center border-4 border-white dark:border-slate-800 shadow-lg" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAe1M1nQ7Ytof2W74oL3c81uhXZIWKAoB-xaBPzwp2KHCIa-ToePr9BklrmAnFkB0XM0V2_k7TpZRZE0TP4yn2FjNOuqOp_TOnxaHnjiM6h-PClbcmX8wfe2F18mwP_87WaD3FHl4ahHVaR86LWpqg7zSJFjINkSUgPPnPjSfu3InSTgk6TI3oG-kuXiAbtGJlHDBRlpp1zj8gUJpm_Nflsq39Ies1imzr2dO9pbB9AdrgbAN7KKhvJy6KYvOPnA2ziG6UvdtpiQQ")' }}>
+        <div className="relative mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+          <div className="h-24 w-24 rounded-full bg-slate-200 dark:bg-slate-700 bg-cover bg-center border-4 border-white dark:border-slate-800 shadow-lg" style={{ backgroundImage: `url("${userAvatar}")` }}>
           </div>
           <div className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white ring-2 ring-white dark:ring-slate-800">
-            <span className="material-symbols-outlined text-[14px]">edit</span>
+            <span className="material-symbols-outlined text-[14px]">photo_camera</span>
           </div>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleAvatarChange} 
+            accept="image/*" 
+            className="hidden" 
+          />
         </div>
         <div className="flex flex-col items-center text-center space-y-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-xl font-bold leading-tight cursor-pointer" onClick={handleEditName}>{userName}</h3>
+            {isEditingName ? (
+              <input
+                ref={inputRef}
+                type="text"
+                value={editNameValue}
+                onChange={(e) => setEditNameValue(e.target.value)}
+                onBlur={handleSaveName}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                className="text-xl font-bold leading-tight text-center bg-transparent border-b-2 border-primary focus:outline-none w-32"
+              />
+            ) : (
+              <h3 className="text-xl font-bold leading-tight cursor-pointer" onClick={() => setIsEditingName(true)}>{userName}</h3>
+            )}
             <button onClick={() => openModal('account-switch')} className="flex items-center gap-0.5 text-xs font-medium text-primary bg-primary/10 active:bg-primary/20 md:hover:bg-primary/20 transition-colors px-2 py-0.5 rounded-full">
               <span className="material-symbols-outlined text-[14px]">sync_alt</span>
               <span>切换账号</span>
             </button>
           </div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">ID: 88888888</p>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">ID: {currentAccountId === 'default' ? '88888888' : currentAccountId.substring(4, 12)}</p>
           <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
             <span>专业版会员</span>
@@ -80,7 +124,7 @@ export default function ProfileScreen() {
           <span className="text-lg font-bold text-slate-900 dark:text-slate-100">{portfolioCount}</span>
           <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">持有组合</span>
         </div>
-        <div className="flex flex-col items-center rounded-xl bg-white dark:bg-[#192633] p-4 shadow-sm border border-slate-100 dark:border-slate-800/50 cursor-pointer active:bg-slate-50 md:hover:bg-slate-50 dark:active:bg-slate-800/50 dark:md:hover:bg-slate-800/50 transition-colors">
+        <div onClick={() => navigate('transaction-history')} className="flex flex-col items-center rounded-xl bg-white dark:bg-[#192633] p-4 shadow-sm border border-slate-100 dark:border-slate-800/50 cursor-pointer active:bg-slate-50 md:hover:bg-slate-50 dark:active:bg-slate-800/50 dark:md:hover:bg-slate-800/50 transition-colors">
           <span className="text-lg font-bold text-slate-900 dark:text-slate-100">{transactionCount}</span>
           <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">交易记录</span>
         </div>

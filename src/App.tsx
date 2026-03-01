@@ -19,18 +19,20 @@ import TotalReturnScreen from './screens/TotalReturnScreen';
 import PortfolioChartScreen from './screens/PortfolioChartScreen';
 import TargetRebalanceScreen from './screens/TargetRebalanceScreen';
 import MemoryBankScreen from './screens/MemoryBankScreen';
+import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import AddFundModal from './modals/AddFundModal';
 import ManualEntryModal from './modals/ManualEntryModal';
 import AccountSwitchModal from './modals/AccountSwitchModal';
 import ImageScanModal from './modals/ImageScanModal';
 import TradeModal from './modals/TradeModal';
 import AddToGroupModal from './modals/AddToGroupModal';
+import TransactionDetailModal from './modals/TransactionDetailModal';
 import BottomNav from './components/BottomNav';
 
 import { updateFundDb } from './utils/fundDb';
 
-export type Screen = 'home' | 'fund-detail' | 'favorites' | 'messages' | 'profile' | 'rebalance' | 'reconcile' | 'feedback' | 'batch-edit' | 'batch-rebalance' | 'security-settings' | 'data-export' | 'data-import' | 'notification-settings' | 'todays-return' | 'total-return' | 'portfolio-chart' | 'target-rebalance' | 'memory-bank';
-export type Modal = 'none' | 'add-fund' | 'manual-entry' | 'account-switch' | 'image-scan' | 'trade' | 'add-to-group';
+export type Screen = 'home' | 'fund-detail' | 'favorites' | 'messages' | 'profile' | 'rebalance' | 'reconcile' | 'feedback' | 'batch-edit' | 'batch-rebalance' | 'security-settings' | 'data-export' | 'data-import' | 'notification-settings' | 'todays-return' | 'total-return' | 'portfolio-chart' | 'target-rebalance' | 'memory-bank' | 'transaction-history';
+export type Modal = 'none' | 'add-fund' | 'manual-entry' | 'account-switch' | 'image-scan' | 'trade' | 'add-to-group' | 'transaction-detail';
 
 export type Transaction = {
   id: string;
@@ -89,6 +91,12 @@ export type AppMessage = {
   type: 'alert' | 'info';
 };
 
+export type Account = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+};
+
 export const NavigationContext = React.createContext<{
   currentScreen: Screen;
   screenParams: any;
@@ -110,10 +118,18 @@ export const NavigationContext = React.createContext<{
   refreshData: () => Promise<void>;
   fundMemory: FundMemory[];
   upsertFundMemory: (code: string, name: string) => void;
+  deleteFundMemory: (code: string) => void;
   messages: AppMessage[];
   markMessageRead: (id: string) => void;
   markAllMessagesRead: () => void;
   deleteMessage: (id: string) => void;
+  accounts: Account[];
+  currentAccountId: string;
+  switchAccount: (id: string) => void;
+  addAccount: (name: string) => void;
+  updateAccountName: (id: string, name: string) => void;
+  deleteAccount: (id: string) => void;
+  updateAccountAvatar: (id: string, url: string) => void;
 }>({
   currentScreen: 'home',
   screenParams: null,
@@ -135,61 +151,128 @@ export const NavigationContext = React.createContext<{
   refreshData: async () => {},
   fundMemory: [],
   upsertFundMemory: () => {},
+  deleteFundMemory: () => {},
   messages: [],
   markMessageRead: () => {},
   markAllMessagesRead: () => {},
   deleteMessage: () => {},
+  accounts: [],
+  currentAccountId: 'default',
+  switchAccount: () => {},
+  addAccount: () => {},
+  updateAccountName: () => {},
+  deleteAccount: () => {},
+  updateAccountAvatar: () => {},
 });
 
-export default function App() {
+function MainApp({ accountId, accounts, currentAccountId, switchAccount, addAccount, updateAccountName, deleteAccount, updateAccountAvatar }: any) {
   const [history, setHistory] = useState<{screen: Screen, params?: any}[]>([{screen: 'home'}]);
   const [currentModal, setCurrentModal] = useState<Modal>('none');
   const [modalParams, setModalParams] = useState<any>(null);
   const [funds, setFunds] = useState<Fund[]>(() => {
-    const saved = localStorage.getItem('fund_app_data');
+    const saved = localStorage.getItem(`${accountId}_fund_app_data`);
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {}
+    } else if (accountId === 'default') {
+      // Migrate old data
+      const oldSaved = localStorage.getItem('fund_app_data');
+      if (oldSaved) {
+        try {
+          return JSON.parse(oldSaved);
+        } catch (e) {}
+      }
     }
     return initialFundsData;
   });
 
   const [fundMemory, setFundMemory] = useState<FundMemory[]>(() => {
-    const saved = localStorage.getItem('fund_memory_db');
+    const saved = localStorage.getItem(`${accountId}_fund_memory_db`);
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {}
+    } else if (accountId === 'default') {
+      const oldSaved = localStorage.getItem('fund_memory_db');
+      if (oldSaved) {
+        try {
+          return JSON.parse(oldSaved);
+        } catch (e) {}
+      }
     }
     return [];
   });
 
   const [messages, setMessages] = useState<AppMessage[]>(() => {
-    const saved = localStorage.getItem('fund_messages');
+    const saved = localStorage.getItem(`${accountId}_fund_messages`);
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {}
+    } else if (accountId === 'default') {
+      const oldSaved = localStorage.getItem('fund_messages');
+      if (oldSaved) {
+        try {
+          return JSON.parse(oldSaved);
+        } catch (e) {}
+      }
     }
     return [];
   });
 
   useEffect(() => {
-    localStorage.setItem('fund_app_data', JSON.stringify(funds));
+    localStorage.setItem(`${accountId}_fund_app_data`, JSON.stringify(funds));
     // Auto-collect funds to memory bank
     funds.forEach(fund => {
       upsertFundMemory(fund.code, fund.name);
     });
-  }, [funds]);
+  }, [funds, accountId]);
 
   useEffect(() => {
-    localStorage.setItem('fund_memory_db', JSON.stringify(fundMemory));
-  }, [fundMemory]);
+    localStorage.setItem(`${accountId}_fund_memory_db`, JSON.stringify(fundMemory));
+  }, [fundMemory, accountId]);
 
   useEffect(() => {
-    localStorage.setItem('fund_messages', JSON.stringify(messages));
-  }, [messages]);
+    localStorage.setItem(`${accountId}_fund_messages`, JSON.stringify(messages));
+  }, [messages, accountId]);
+
+  useEffect(() => {
+    const checkAndDeleteOldTransactions = () => {
+      const now = new Date();
+      if (now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() >= 30)) {
+        const todayStr = now.toISOString().split('T')[0];
+        const lastDeleteDate = localStorage.getItem(`${accountId}_last_tx_delete_date`);
+        
+        if (lastDeleteDate !== todayStr) {
+          const twoDaysAgo = new Date(now);
+          twoDaysAgo.setDate(now.getDate() - 2);
+          const cutoffDateStr = twoDaysAgo.toISOString().split('T')[0];
+
+          setFunds(prevFunds => {
+            let changed = false;
+            const newFunds = prevFunds.map(fund => {
+              if (fund.transactions && fund.transactions.length > 0) {
+                const filtered = fund.transactions.filter(t => t.date > cutoffDateStr);
+                if (filtered.length !== fund.transactions.length) {
+                  changed = true;
+                  return { ...fund, transactions: filtered };
+                }
+              }
+              return fund;
+            });
+            return changed ? newFunds : prevFunds;
+          });
+          
+          localStorage.setItem(`${accountId}_last_tx_delete_date`, todayStr);
+        }
+      }
+    };
+
+    checkAndDeleteOldTransactions();
+    const interval = setInterval(checkAndDeleteOldTransactions, 60000);
+    return () => clearInterval(interval);
+  }, [accountId]);
 
   const markMessageRead = (id: string) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
@@ -211,6 +294,10 @@ export default function App() {
       }
       return [...prev, { fundCode: code, fundName: name, updatedAt: Date.now() }];
     });
+  };
+
+  const deleteFundMemory = (code: string) => {
+    setFundMemory(prev => prev.filter(m => m.fundCode !== code));
   };
 
   const fundsRef = useRef(funds);
@@ -447,7 +534,7 @@ export default function App() {
   const showBottomNav = ['home', 'favorites', 'profile', 'fund-detail'].includes(currentScreen);
 
   return (
-    <NavigationContext.Provider value={{ currentScreen, screenParams, navigate, currentModal, modalParams, openModal, closeModal, goBack, funds, setFunds, toggleFavorite, deleteFund, addFund, addTransaction, updateGroupName, changeFundGroup, updateFund, refreshData, fundMemory, upsertFundMemory, messages, markMessageRead, markAllMessagesRead, deleteMessage }}>
+    <NavigationContext.Provider value={{ currentScreen, screenParams, navigate, currentModal, modalParams, openModal, closeModal, goBack, funds, setFunds, toggleFavorite, deleteFund, addFund, addTransaction, updateGroupName, changeFundGroup, updateFund, refreshData, fundMemory, upsertFundMemory, deleteFundMemory, messages, markMessageRead, markAllMessagesRead, deleteMessage, accounts, currentAccountId, switchAccount, addAccount, updateAccountName, deleteAccount, updateAccountAvatar }}>
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-background-light shadow-2xl dark:bg-background-dark">
         <AnimatePresence mode="wait">
           <motion.div
@@ -477,6 +564,7 @@ export default function App() {
             {currentScreen === 'portfolio-chart' && <PortfolioChartScreen />}
             {currentScreen === 'target-rebalance' && <TargetRebalanceScreen />}
             {currentScreen === 'memory-bank' && <MemoryBankScreen />}
+            {currentScreen === 'transaction-history' && <TransactionHistoryScreen />}
           </motion.div>
         </AnimatePresence>
 
@@ -505,11 +593,86 @@ export default function App() {
                 {currentModal === 'image-scan' && <ImageScanModal />}
                 {currentModal === 'trade' && <TradeModal />}
                 {currentModal === 'add-to-group' && <AddToGroupModal />}
+                {currentModal === 'transaction-detail' && <TransactionDetailModal />}
               </motion.div>
             </>
           )}
         </AnimatePresence>
       </div>
     </NavigationContext.Provider>
+  );
+}
+
+export default function App() {
+  const [accounts, setAccounts] = useState<Account[]>(() => {
+    const saved = localStorage.getItem('app_accounts');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [{ id: 'default', name: localStorage.getItem('user_name') || '张三' }];
+  });
+
+  const [currentAccountId, setCurrentAccountId] = useState<string>(() => {
+    return localStorage.getItem('current_account_id') || 'default';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_accounts', JSON.stringify(accounts));
+  }, [accounts]);
+
+  useEffect(() => {
+    localStorage.setItem('current_account_id', currentAccountId);
+  }, [currentAccountId]);
+
+  const switchAccount = (id: string) => {
+    if (accounts.find(a => a.id === id)) {
+      setCurrentAccountId(id);
+    }
+  };
+
+  const addAccount = (name: string) => {
+    const newId = 'acc_' + Date.now().toString() + Math.random().toString(36).substring(7);
+    setAccounts(prev => [...prev, { id: newId, name }]);
+    setCurrentAccountId(newId);
+  };
+
+  const updateAccountName = (id: string, name: string) => {
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, name } : a));
+  };
+
+  const deleteAccount = (id: string) => {
+    if (id === 'default') return; // Cannot delete default account
+    setAccounts(prev => {
+      const newAccounts = prev.filter(a => a.id !== id);
+      if (currentAccountId === id) {
+        setCurrentAccountId('default');
+      }
+      return newAccounts;
+    });
+    // Clean up local storage data for this account
+    localStorage.removeItem(`${id}_fund_app_data`);
+    localStorage.removeItem(`${id}_fund_memory_db`);
+    localStorage.removeItem(`${id}_fund_messages`);
+    localStorage.removeItem(`${id}_last_tx_delete_date`);
+  };
+
+  const updateAccountAvatar = (id: string, url: string) => {
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, avatarUrl: url } : a));
+  };
+
+  return (
+    <MainApp 
+      key={currentAccountId} 
+      accountId={currentAccountId} 
+      accounts={accounts} 
+      currentAccountId={currentAccountId} 
+      switchAccount={switchAccount} 
+      addAccount={addAccount} 
+      updateAccountName={updateAccountName} 
+      deleteAccount={deleteAccount}
+      updateAccountAvatar={updateAccountAvatar}
+    />
   );
 }

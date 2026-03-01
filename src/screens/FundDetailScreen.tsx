@@ -28,22 +28,37 @@ export default function FundDetailScreen() {
   const fetchFundDetails = async (code: string, range: string) => {
     setIsLoading(true);
     try {
-      let pageSize = 30;
-      if (range === '7d') pageSize = 7;
-      if (range === '3m') pageSize = 90;
-      if (range === '1y') pageSize = 365;
-
-      const historyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`https://fundmobapi.eastmoney.com/FundMNewApi/FundMNHisNetList?pageIndex=1&pageSize=${pageSize}&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=1&FCODE=${code}`)}`;
+      // Fetch history data using pingzhongdata API
+      const historyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`http://fund.eastmoney.com/pingzhongdata/${code}.js`)}`;
       const historyResponse = await fetch(historyUrl);
-      const historyData = await historyResponse.json();
+      const historyText = await historyResponse.text();
       
-      if (historyData && historyData.Datas) {
-        const formattedData = historyData.Datas.reverse().map((item: any) => ({
-          date: item.FSRQ.substring(5), // MM-DD
-          fullDate: item.FSRQ,
-          nav: parseFloat(item.DWJZ),
-          change: parseFloat(item.JZZZL)
-        }));
+      // Extract Data_netWorthTrend
+      const match = historyText.match(/var Data_netWorthTrend = (\[.*?\]);/);
+      if (match && match[1]) {
+        const allData = JSON.parse(match[1]);
+        
+        let days = 30;
+        if (range === '7d') days = 7;
+        if (range === '3m') days = 90;
+        if (range === '1y') days = 365;
+        
+        const recentData = allData.slice(-days);
+        
+        const formattedData = recentData.map((item: any) => {
+          const dateObj = new Date(item.x);
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          const year = dateObj.getFullYear();
+          
+          return {
+            date: `${month}-${day}`,
+            fullDate: `${year}-${month}-${day}`,
+            nav: item.y,
+            change: item.equityReturn
+          };
+        });
+        
         setNavHistory(formattedData);
       }
 
@@ -90,6 +105,24 @@ export default function FundDetailScreen() {
     );
   }
 
+  const getRemainingAmount = (date: string) => {
+    if (!fund.transactions) return 0;
+    let shares = 0;
+    const sortedTx = [...fund.transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    for (const tx of sortedTx) {
+      if (tx.date > date) break;
+      const nav = tx.nav || 1;
+      if (tx.type === 'buy' || tx.type === 'add') {
+        shares += tx.amount / nav;
+      } else if (tx.type === 'sell') {
+        shares -= tx.amount / nav;
+      }
+    }
+    const point = navHistory.find(h => h.fullDate === date);
+    const currentNav = point ? point.nav : 1;
+    return Math.max(0, shares * currentNav);
+  };
+
   // Map transactions to chart data points
   const getTransactionDots = () => {
     if (!fund.transactions || navHistory.length === 0) return [];
@@ -107,7 +140,7 @@ export default function FundDetailScreen() {
           key={t.id} 
           x={point.date} 
           y={point.nav} 
-          r={4} 
+          r={5} 
           fill={color} 
           stroke="#fff" 
           strokeWidth={2}
@@ -122,18 +155,39 @@ export default function FundDetailScreen() {
       const data = payload[0].payload;
       const transactions = fund.transactions?.filter(t => t.date === data.fullDate) || [];
       
+      if (transactions.length > 0) {
+        const remainingAmount = getRemainingAmount(data.fullDate);
+        return (
+          <div className="bg-slate-800 text-white text-xs p-3 rounded-lg shadow-xl z-50 border border-slate-700 min-w-[140px]">
+            <p className="font-bold mb-2 text-slate-200">{data.fullDate}</p>
+            <div className="space-y-1.5">
+              <p className="flex justify-between gap-4">
+                <span className="text-slate-400">净值</span>
+                <span className="font-medium">{data.nav.toFixed(4)}</span>
+              </p>
+              {transactions.map(t => (
+                <p key={t.id} className="flex justify-between gap-4">
+                  <span className="text-slate-400">{t.type === 'buy' ? '买入' : t.type === 'add' ? '加仓' : '减仓'}金额</span>
+                  <span className={`font-medium ${t.type === 'sell' ? 'text-orange-400' : t.type === 'add' ? 'text-emerald-400' : 'text-blue-400'}`}>
+                    ¥{t.amount.toFixed(2)}
+                  </span>
+                </p>
+              ))}
+              <div className="h-px bg-slate-700 my-1"></div>
+              <p className="flex justify-between gap-4">
+                <span className="text-slate-400">剩余总金额</span>
+                <span className="font-bold text-blue-400">¥{remainingAmount.toFixed(2)}</span>
+              </p>
+            </div>
+          </div>
+        );
+      }
+      
       return (
         <div className="bg-slate-800 text-white text-xs p-2 rounded shadow-lg z-50">
           <p className="font-bold mb-1">{data.fullDate}</p>
           <p>净值: {data.nav.toFixed(4)}</p>
           <p>涨跌: <span className={data.change >= 0 ? 'text-red-400' : 'text-green-400'}>{data.change >= 0 ? '+' : ''}{data.change}%</span></p>
-          {transactions.map(t => (
-            <div key={t.id} className="mt-1 pt-1 border-t border-slate-600">
-              <p className={t.type === 'sell' ? 'text-orange-400' : 'text-blue-400'}>
-                {t.type === 'buy' ? '买入' : t.type === 'add' ? '加仓' : '卖出'}: ¥{t.amount.toFixed(2)}
-              </p>
-            </div>
-          ))}
         </div>
       );
     }
@@ -369,7 +423,11 @@ export default function FundDetailScreen() {
           <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-4 px-1">交易记录</h3>
           <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
             {fund.transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((t, index) => (
-              <div key={t.id} className={`p-4 flex items-center justify-between ${index !== fund.transactions!.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}>
+              <div 
+                key={t.id} 
+                className={`p-4 flex items-center justify-between cursor-pointer active:bg-slate-50 md:hover:bg-slate-50 dark:active:bg-slate-800 dark:md:hover:bg-slate-800 transition-colors ${index !== fund.transactions!.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}
+                onClick={() => openModal('transaction-detail', { transaction: { ...t, fundName: fund.name, fundCode: fund.code } })}
+              >
                 <div className="flex items-center gap-3">
                   <div className={`size-8 rounded-full flex items-center justify-center ${
                     t.type === 'buy' ? 'bg-primary/10 text-primary' : 
