@@ -126,8 +126,23 @@ export default function ImageScanModal() {
           for (const line of lines) {
             const match = line.trim().match(regex);
             if (match) {
+              let parsedName = match[1].trim();
+              let matchedCode = '';
+              
+              // Fuzzy match with memory bank
+              if (fundMemory && fundMemory.length > 0) {
+                const bestMatch = fundMemory.find(f => 
+                  parsedName.includes(f.fundName) || f.fundName.includes(parsedName)
+                );
+                if (bestMatch) {
+                  parsedName = bestMatch.fundName;
+                  matchedCode = bestMatch.fundCode;
+                }
+              }
+
               data.push({
-                fundName: match[1].trim(),
+                fundName: parsedName,
+                fundCode: matchedCode,
                 amount: parseFloat(match[2]),
                 holdingReturn: parseFloat(match[3]),
                 returnRate: match[4].includes('%') ? match[4] : `${match[4]}%`
@@ -298,15 +313,48 @@ export default function ImageScanModal() {
     setScannedFunds(updatedFunds);
   };
 
-  const handleAddEmpty = () => {
-    setScannedFunds([...scannedFunds, {
-      id: Date.now().toString(),
-      fundName: '待输入',
-      amount: 0,
-      holdingReturn: 0,
-      returnRate: '0.00%',
-      fundCode: '代码待补充'
-    }]);
+  const [isBatchAdding, setIsBatchAdding] = useState(false);
+  const [batchInput, setBatchInput] = useState('');
+
+  const handleBatchAdd = async () => {
+    if (!batchInput.trim()) {
+      setIsBatchAdding(false);
+      return;
+    }
+    
+    const lines = batchInput.split('\n').map(l => l.trim()).filter(l => l);
+    const newFunds: ScannedFund[] = [];
+    
+    for (const line of lines) {
+      const parts = line.split(/\s+/);
+      if (parts.length >= 2) {
+        const code = parts[0];
+        const amt = parseFloat(parts[1]);
+        if (/^\d{6}$/.test(code) && !isNaN(amt)) {
+          let name = code;
+          try {
+            const fallbackResponse = await fetch(`https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=50&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=1&Fcodes=${code}`);
+            const fallbackData = await fallbackResponse.json();
+            if (fallbackData && fallbackData.Datas && fallbackData.Datas.length > 0) {
+              name = fallbackData.Datas[0].SHORTNAME;
+            }
+          } catch (e) {}
+          
+          newFunds.push({
+            id: Date.now().toString() + Math.random().toString(36).substring(7),
+            fundName: name,
+            amount: amt,
+            holdingReturn: 0,
+            returnRate: '0.00%',
+            fundCode: code
+          });
+        }
+      }
+    }
+    
+    setScannedFunds([...scannedFunds, ...newFunds]);
+    setBatchInput('');
+    setIsBatchAdding(false);
   };
 
   const handleDelete = (index: number) => {
@@ -526,10 +574,41 @@ export default function ImageScanModal() {
                   </div>
                 </div>
               ))}
-              <button onClick={handleAddEmpty} className="w-full py-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-500 hover:text-primary hover:border-primary transition-colors flex items-center justify-center gap-1 text-sm font-medium mt-2">
-                <span className="material-symbols-outlined text-[18px]">add</span>
-                添加一条记录
-              </button>
+              {isBatchAdding ? (
+                <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">批量输入 (基金代码 金额)</label>
+                  <textarea 
+                    value={batchInput}
+                    onChange={(e) => setBatchInput(e.target.value)}
+                    placeholder="例如：&#10;000001 1000&#10;000002 2000"
+                    className="w-full h-32 p-3 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-primary resize-none mb-3"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setIsBatchAdding(false)} className="flex-1 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-bold">取消</button>
+                    <button onClick={handleBatchAdd} className="flex-1 py-2 rounded-lg bg-primary text-white text-sm font-bold">确认添加</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => {
+                    setScannedFunds([...scannedFunds, {
+                      id: Date.now().toString(),
+                      fundName: '待输入',
+                      amount: 0,
+                      holdingReturn: 0,
+                      returnRate: '0.00%',
+                      fundCode: '代码待补充'
+                    }]);
+                  }} className="flex-1 py-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-500 hover:text-primary hover:border-primary transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                    添加一条记录
+                  </button>
+                  <button onClick={() => setIsBatchAdding(true)} className="flex-1 py-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-500 hover:text-primary hover:border-primary transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                    <span className="material-symbols-outlined text-[18px]">list</span>
+                    批量输入
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 w-full">

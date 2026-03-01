@@ -2,13 +2,28 @@ import React, { useContext, useState } from 'react';
 import { NavigationContext } from '../App';
 
 export default function FundDetailScreen() {
-  const { goBack, openModal, funds, currentScreenParams } = useContext(NavigationContext);
+  const { goBack, openModal, funds, screenParams, updateFund } = useContext(NavigationContext);
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'7d' | '1m' | '3m' | '1y'>('1m');
 
-  const fundId = currentScreenParams?.fundId;
+  const fundId = screenParams?.fundId;
   const portfolioFunds = funds.filter(f => f.inPortfolio !== false);
   const fund = fundId ? funds.find(f => f.id === fundId) : portfolioFunds[0];
+
+  const [takeProfit, setTakeProfit] = useState(fund?.targetTakeProfit?.toString() || '');
+  const [stopLoss, setStopLoss] = useState(fund?.targetStopLoss?.toString() || '');
+  const [isEditingAlerts, setIsEditingAlerts] = useState(false);
+
+  const handleSaveAlerts = () => {
+    if (!fund) return;
+    const tp = parseFloat(takeProfit);
+    const sl = parseFloat(stopLoss);
+    updateFund(fund.id, {
+      targetTakeProfit: isNaN(tp) ? undefined : tp,
+      targetStopLoss: isNaN(sl) ? undefined : sl
+    });
+    setIsEditingAlerts(false);
+  };
 
   if (!fund) {
     return (
@@ -196,6 +211,60 @@ export default function FundDetailScreen() {
             </div>
             <p className="text-xs text-slate-400 mt-1">晨星五年五星</p>
           </div>
+        </div>
+      </div>
+
+      <div className="px-4 mt-6">
+        <div className="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">自定义报警 (净值)</h3>
+            {isEditingAlerts ? (
+              <button onClick={handleSaveAlerts} className="text-primary text-sm font-semibold bg-primary/10 px-3 py-1 rounded-full">保存</button>
+            ) : (
+              <button onClick={() => setIsEditingAlerts(true)} className="text-slate-500 text-sm font-semibold hover:text-primary">设置</button>
+            )}
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="size-2 rounded-full bg-red-500"></div>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">止盈线 (&gt;=)</span>
+              </div>
+              {isEditingAlerts ? (
+                <input 
+                  type="number" 
+                  step="0.0001"
+                  value={takeProfit}
+                  onChange={(e) => setTakeProfit(e.target.value)}
+                  placeholder="如: 1.5000"
+                  className="w-24 px-2 py-1 text-right bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-sm focus:outline-none focus:border-primary"
+                />
+              ) : (
+                <span className="text-sm font-bold text-slate-900 dark:text-white">{fund?.targetTakeProfit ? `¥${fund.targetTakeProfit.toFixed(4)}` : '未设置'}</span>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="size-2 rounded-full bg-green-500"></div>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">止损线 (&lt;=)</span>
+              </div>
+              {isEditingAlerts ? (
+                <input 
+                  type="number" 
+                  step="0.0001"
+                  value={stopLoss}
+                  onChange={(e) => setStopLoss(e.target.value)}
+                  placeholder="如: 1.0000"
+                  className="w-24 px-2 py-1 text-right bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-sm focus:outline-none focus:border-primary"
+                />
+              ) : (
+                <span className="text-sm font-bold text-slate-900 dark:text-white">{fund?.targetStopLoss ? `¥${fund.targetStopLoss.toFixed(4)}` : '未设置'}</span>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mt-4">当基金净值达到设定的止盈或止损线时，系统将在消息中心发送提醒。</p>
         </div>
       </div>
 

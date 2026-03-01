@@ -85,6 +85,15 @@ export default function ProfileScreen() {
             </div>
             <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]">chevron_right</span>
           </button>
+          <button onClick={() => navigate('memory-bank')} className="w-full group flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:bg-indigo-500/20">
+                <span className="material-symbols-outlined">memory</span>
+              </div>
+              <span className="text-base font-medium text-slate-900 dark:text-slate-100">基金记忆库</span>
+            </div>
+            <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]">chevron_right</span>
+          </button>
           <button onClick={() => navigate('notification-settings')} className="w-full group flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500 dark:bg-orange-500/20">

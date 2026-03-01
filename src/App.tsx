@@ -16,6 +16,9 @@ import DataImportScreen from './screens/DataImportScreen';
 import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
 import TodaysReturnScreen from './screens/TodaysReturnScreen';
 import TotalReturnScreen from './screens/TotalReturnScreen';
+import PortfolioChartScreen from './screens/PortfolioChartScreen';
+import TargetRebalanceScreen from './screens/TargetRebalanceScreen';
+import MemoryBankScreen from './screens/MemoryBankScreen';
 import AddFundModal from './modals/AddFundModal';
 import ManualEntryModal from './modals/ManualEntryModal';
 import AccountSwitchModal from './modals/AccountSwitchModal';
@@ -24,7 +27,9 @@ import TradeModal from './modals/TradeModal';
 import AddToGroupModal from './modals/AddToGroupModal';
 import BottomNav from './components/BottomNav';
 
-export type Screen = 'home' | 'fund-detail' | 'favorites' | 'messages' | 'profile' | 'rebalance' | 'reconcile' | 'feedback' | 'batch-edit' | 'batch-rebalance' | 'security-settings' | 'data-export' | 'data-import' | 'notification-settings' | 'todays-return' | 'total-return';
+import { updateFundDb } from './utils/fundDb';
+
+export type Screen = 'home' | 'fund-detail' | 'favorites' | 'messages' | 'profile' | 'rebalance' | 'reconcile' | 'feedback' | 'batch-edit' | 'batch-rebalance' | 'security-settings' | 'data-export' | 'data-import' | 'notification-settings' | 'todays-return' | 'total-return' | 'portfolio-chart' | 'target-rebalance' | 'memory-bank';
 export type Modal = 'none' | 'add-fund' | 'manual-entry' | 'account-switch' | 'image-scan' | 'trade' | 'add-to-group';
 
 export type Transaction = {
@@ -55,6 +60,9 @@ export type Fund = {
   netValueDate?: string;
   dataStatus?: string;
   transactions?: Transaction[];
+  isActualNav?: boolean;
+  targetTakeProfit?: number;
+  targetStopLoss?: number;
 };
 
 const initialFundsData: Fund[] = [
@@ -91,6 +99,7 @@ export const NavigationContext = React.createContext<{
   closeModal: () => void;
   goBack: () => void;
   funds: Fund[];
+  setFunds: React.Dispatch<React.SetStateAction<Fund[]>>;
   toggleFavorite: (id: string) => void;
   deleteFund: (id: string) => void;
   addFund: (fund: Fund) => void;
@@ -115,6 +124,7 @@ export const NavigationContext = React.createContext<{
   closeModal: () => {},
   goBack: () => {},
   funds: [],
+  setFunds: () => {},
   toggleFavorite: () => {},
   deleteFund: () => {},
   addFund: () => {},
@@ -167,6 +177,10 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('fund_app_data', JSON.stringify(funds));
+    // Auto-collect funds to memory bank
+    funds.forEach(fund => {
+      upsertFundMemory(fund.code, fund.name);
+    });
   }, [funds]);
 
   useEffect(() => {
@@ -245,13 +259,20 @@ export default function App() {
 
             // Check if we have actual net value for today
             const nfItem = nfInfoMap[fund.code];
+            let isActualNav = false;
+            
             if (nfItem && nfItem.PDATE && update_time !== '未知') {
               // Extract date from gztime (e.g., "2026-02-27 15:00")
               const tradingDay = update_time.split(' ')[0];
-              if (nfItem.PDATE >= tradingDay) {
+              const now = new Date();
+              const todayStr = now.toISOString().split('T')[0];
+              const isAfter3PM = now.getHours() >= 15;
+              
+              if (nfItem.PDATE >= tradingDay || (isAfter3PM && nfItem.PDATE === todayStr)) {
                 // Actual net value is out! Use it instead of estimate
                 real_time_estimate = nfItem.NAV ? parseFloat(nfItem.NAV).toFixed(4) : real_time_estimate;
                 estimate_change = nfItem.NAVCHGRT ? parseFloat(nfItem.NAVCHGRT).toFixed(2) : estimate_change;
+                isActualNav = true;
               }
             }
 
@@ -270,7 +291,8 @@ export default function App() {
               updateTime: update_time,
               latestNetValue: latest_net_value,
               netValueDate: net_value_date,
-              dataStatus: dataStatus
+              dataStatus: dataStatus,
+              isActualNav: isActualNav
             };
           }
         } catch (e) {
@@ -290,9 +312,18 @@ export default function App() {
           const newMessages: AppMessage[] = [];
           
           updatedFunds.forEach(fund => {
+            let alertReasons = [];
+            const currentNav = parseFloat(fund.nav);
+
+            // Check Custom Alerts (Take Profit / Stop Loss)
+            if (fund.targetTakeProfit && currentNav >= fund.targetTakeProfit) {
+              alertReasons.push(`当前净值(${currentNav})已达到或超过止盈线(${fund.targetTakeProfit})`);
+            }
+            if (fund.targetStopLoss && currentNav <= fund.targetStopLoss) {
+              alertReasons.push(`当前净值(${currentNav})已跌破或达到止损线(${fund.targetStopLoss})`);
+            }
+
             if (fund.isStarred) {
-              let alertReasons = [];
-              
               let lastBuyNav = null;
               let lastBuyAmount = null;
               if (fund.transactions && fund.transactions.length > 0) {
@@ -303,8 +334,6 @@ export default function App() {
                 }
               }
               
-              const currentNav = parseFloat(fund.nav);
-              
               if (lastBuyNav && currentNav < lastBuyNav) {
                 alertReasons.push(`当前净值(${currentNav})低于上次买入净值(${lastBuyNav})`);
               }
@@ -314,17 +343,17 @@ export default function App() {
               } else if (fund.totalReturnRate < 10) {
                 alertReasons.push(`累计收益低于10% (${fund.totalReturnRate.toFixed(2)}%)`);
               }
-              
-              if (alertReasons.length > 0) {
-                newMessages.push({
-                  id: Date.now().toString() + Math.random().toString(36).substring(7),
-                  title: `基金异动提醒: ${fund.name}`,
-                  content: `基金名: ${fund.name}\n上次买入净值: ${lastBuyNav || '无'}\n买入金额: ${lastBuyAmount ? '¥'+lastBuyAmount : '无'}\n当前总额: ¥${fund.amount.toFixed(2)}\n当前净值: ${fund.nav}\n\n触发原因:\n- ${alertReasons.join('\n- ')}`,
-                  date: now.toISOString(),
-                  read: false,
-                  type: 'alert'
-                });
-              }
+            }
+            
+            if (alertReasons.length > 0) {
+              newMessages.push({
+                id: Date.now().toString() + Math.random().toString(36).substring(7),
+                title: `基金异动提醒: ${fund.name}`,
+                content: `基金名: ${fund.name}\n当前总额: ¥${fund.amount.toFixed(2)}\n当前净值: ${fund.nav}\n\n触发原因:\n- ${alertReasons.join('\n- ')}`,
+                date: now.toISOString(),
+                read: false,
+                type: 'alert'
+              });
             }
           });
           
@@ -342,6 +371,7 @@ export default function App() {
 
   useEffect(() => {
     refreshData();
+    updateFundDb();
     const interval = setInterval(refreshData, 60000); // 1 minute
     return () => clearInterval(interval);
   }, []);
@@ -410,7 +440,7 @@ export default function App() {
   const showBottomNav = ['home', 'favorites', 'profile', 'fund-detail'].includes(currentScreen);
 
   return (
-    <NavigationContext.Provider value={{ currentScreen, screenParams, navigate, currentModal, modalParams, openModal, closeModal, goBack, funds, toggleFavorite, deleteFund, addFund, addTransaction, updateGroupName, changeFundGroup, updateFund, refreshData, fundMemory, upsertFundMemory, messages, markMessageRead, markAllMessagesRead, deleteMessage }}>
+    <NavigationContext.Provider value={{ currentScreen, screenParams, navigate, currentModal, modalParams, openModal, closeModal, goBack, funds, setFunds, toggleFavorite, deleteFund, addFund, addTransaction, updateGroupName, changeFundGroup, updateFund, refreshData, fundMemory, upsertFundMemory, messages, markMessageRead, markAllMessagesRead, deleteMessage }}>
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-background-light shadow-2xl dark:bg-background-dark">
         <AnimatePresence mode="wait">
           <motion.div
@@ -437,6 +467,9 @@ export default function App() {
             {currentScreen === 'notification-settings' && <NotificationSettingsScreen />}
             {currentScreen === 'todays-return' && <TodaysReturnScreen />}
             {currentScreen === 'total-return' && <TotalReturnScreen />}
+            {currentScreen === 'portfolio-chart' && <PortfolioChartScreen />}
+            {currentScreen === 'target-rebalance' && <TargetRebalanceScreen />}
+            {currentScreen === 'memory-bank' && <MemoryBankScreen />}
           </motion.div>
         </AnimatePresence>
 

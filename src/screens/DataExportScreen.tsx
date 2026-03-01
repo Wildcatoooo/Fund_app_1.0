@@ -2,8 +2,55 @@ import React, { useContext, useState } from 'react';
 import { NavigationContext } from '../App';
 
 export default function DataExportScreen() {
-  const { goBack } = useContext(NavigationContext);
-  const [exportFormat, setExportFormat] = useState('csv');
+  const { goBack, funds } = useContext(NavigationContext);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const [exportHoldings, setExportHoldings] = useState(true);
+  const [exportTransactions, setExportTransactions] = useState(true);
+
+  const handleExport = () => {
+    if (exportFormat === 'json') {
+      const dataToExport = {
+        funds: exportHoldings ? funds : [],
+        // In the future, if transactions are stored separately, add them here
+        exportDate: new Date().toISOString()
+      };
+      
+      const dataStr = JSON.stringify(dataToExport, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `fund_data_${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+    } else {
+      // CSV Export
+      let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // Add BOM for Excel
+      
+      if (exportHoldings) {
+        csvContent += "基金代码,基金名称,持有金额,持有收益率,分组\n";
+        funds.forEach(fund => {
+          const row = [
+            fund.code,
+            fund.name,
+            fund.amount,
+            fund.returnRate,
+            fund.group
+          ].join(",");
+          csvContent += row + "\n";
+        });
+      }
+      
+      const encodedUri = encodeURI(csvContent);
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', encodedUri);
+      linkElement.setAttribute('download', `fund_data_${new Date().toISOString().split('T')[0]}.csv`);
+      linkElement.click();
+    }
+    
+    goBack();
+  };
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 bg-slate-50 dark:bg-background-dark">
@@ -50,11 +97,11 @@ export default function DataExportScreen() {
           <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 px-1">选择导出内容</h4>
           <div className="bg-white dark:bg-[#192633] rounded-xl border border-slate-100 dark:border-slate-800/50 overflow-hidden">
             <label className="flex items-center p-4 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary" />
+              <input type="checkbox" checked={exportHoldings} onChange={(e) => setExportHoldings(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary" />
               <span className="ml-3 text-sm font-medium text-slate-700 dark:text-slate-300">当前持仓数据</span>
             </label>
             <label className="flex items-center p-4 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary" />
+              <input type="checkbox" checked={exportTransactions} onChange={(e) => setExportTransactions(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary" />
               <span className="ml-3 text-sm font-medium text-slate-700 dark:text-slate-300">历史交易记录</span>
             </label>
             <label className="flex items-center p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
@@ -65,13 +112,10 @@ export default function DataExportScreen() {
         </div>
 
         <button 
-          onClick={() => {
-            alert(`已开始导出 ${exportFormat.toUpperCase()} 格式数据`);
-            goBack();
-          }}
+          onClick={handleExport}
           className="w-full h-14 rounded-xl bg-primary text-white font-bold text-lg shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-[0.98] transition-all mt-4"
         >
-          下一步：生成文件
+          生成并下载文件
         </button>
       </div>
     </div>

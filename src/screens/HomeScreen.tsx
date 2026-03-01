@@ -223,7 +223,7 @@ export default function HomeScreen() {
             </div>
             <div className="flex items-center gap-1 flex-wrap mt-0.5">
               <p className="text-xs text-slate-500 dark:text-slate-400">{fund.code}</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">估值 {fund.nav}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">{fund.isActualNav ? '净值' : '估值'} {fund.nav}</p>
               {fund.dataStatus === '数据异常，请核实' && (
                 <span className="text-[9px] text-red-500 bg-red-100 dark:bg-red-900/30 px-1 rounded">异常</span>
               )}
@@ -300,7 +300,15 @@ export default function HomeScreen() {
                 </div>
               )}
             </div>
-            <p className="text-3xl font-extrabold text-white tracking-tight mt-1">{privacyMode ? '******' : `¥${totalAmount.toFixed(2)}`}</p>
+            <div 
+              className="cursor-pointer group"
+              onClick={() => navigate('portfolio-chart')}
+            >
+              <p className="text-3xl font-extrabold text-white tracking-tight mt-1 group-hover:opacity-90 transition-opacity">
+                {privacyMode ? '******' : `¥${totalAmount.toFixed(2)}`}
+                <span className="material-symbols-outlined text-lg ml-2 opacity-0 group-hover:opacity-100 transition-opacity align-middle">pie_chart</span>
+              </p>
+            </div>
             <div className="mt-4 flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 w-fit backdrop-blur-md">
               <span className={`material-symbols-outlined text-sm ${privacyMode ? 'text-slate-300' : isTodaysReturnUp ? 'text-red-300' : 'text-green-300'}`}>
                 {isTodaysReturnUp ? 'trending_up' : 'trending_down'}
@@ -373,7 +381,7 @@ export default function HomeScreen() {
           </div>
           <div className="col-span-3 flex flex-col items-end justify-center cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 transition-colors" onClick={() => handleSort('returnRate')}>
             <div className="flex items-center gap-1">
-              估值涨跌
+              {funds.some(f => f.isActualNav) ? '净值/估值涨跌' : '估值涨跌'}
             </div>
             <div className="text-[9px] opacity-70">今日收益</div>
           </div>
