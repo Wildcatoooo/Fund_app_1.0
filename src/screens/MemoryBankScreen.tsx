@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { NavigationContext } from '../App';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function MemoryBankScreen() {
   const { goBack, fundMemory, upsertFundMemory, deleteFundMemory } = useContext(NavigationContext);
